@@ -1,0 +1,201 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ───────────────────────────────────────────────
+
+enum Role {
+  GARDENER
+  COORDINATOR
+  ADMIN
+}
+
+enum PlotStatus {
+  AVAILABLE
+  RESERVED
+  ACTIVE
+  FALLOW
+}
+
+enum Sunlight {
+  FULL_SUN
+  PARTIAL_SHADE
+  FULL_SHADE
+}
+
+enum TaskCategory {
+  WATERING
+  WEEDING
+  HARVESTING
+  MAINTENANCE
+  EVENT
+}
+
+enum Recurrence {
+  DAILY
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+}
+
+enum TaskSignupStatus {
+  SIGNED_UP
+  COMPLETED
+  NO_SHOW
+}
+
+enum ContactVisibility {
+  PUBLIC
+  MEMBERS_ONLY
+  PRIVATE
+}
+
+enum DiscussionContext {
+  PLOT
+  TASK
+  GENERAL
+}
+
+// ─── Models ──────────────────────────────────────────────
+
+model User {
+  id                String            @id @default(cuid())
+  name              String
+  email             String            @unique
+  passwordHash      String
+  role              Role              @default(GARDENER)
+  profileImage      String?
+  joinDate          DateTime          @default(now())
+  contactVisibility ContactVisibility @default(MEMBERS_ONLY)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  plots         Plot[]
+  plantingLogs  PlantingLog[]
+  createdTasks  Task[]         @relation("TaskCreator")
+  taskSignups   TaskSignup[]
+  announcements Announcement[]
+  discussions   Discussion[]
+  comments      Comment[]
+
+  @@map("users")
+}
+
+model Plot {
+  id             String     @id @default(cuid())
+  label          String
+  size           String
+  location       String
+  sunlight       Sunlight   @default(FULL_SUN)
+  status         PlotStatus @default(AVAILABLE)
+  season         String?
+  assignedUserId String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  assignedUser User?         @relation(fields: [assignedUserId], references: [id], onDelete: SetNull)
+  plantingLogs PlantingLog[]
+  discussions  Discussion[]
+
+  @@map("plots")
+}
+
+model PlantingLog {
+  id            String    @id @default(cuid())
+  plotId        String
+  userId        String
+  plantName     String
+  plantApiId    String?
+  datePlanted   DateTime
+  dateHarvested DateTime?
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  plot Plot @relation(fields: [plotId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("planting_logs")
+}
+
+model Task {
+  id              String        @id @default(cuid())
+  title           String
+  description     String
+  category        TaskCategory
+  date            DateTime
+  recurrence      Recurrence?
+  createdByUserId String
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  createdBy   User          @relation("TaskCreator", fields: [createdByUserId], references: [id], onDelete: Cascade)
+  signups     TaskSignup[]
+  discussions Discussion[]
+
+  @@map("tasks")
+}
+
+model TaskSignup {
+  id     String           @id @default(cuid())
+  taskId String
+  userId String
+  status TaskSignupStatus @default(SIGNED_UP)
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, userId])
+  @@map("task_signups")
+}
+
+model Announcement {
+  id           String   @id @default(cuid())
+  title        String
+  body         String
+  authorUserId String
+  pinned       Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  author User @relation(fields: [authorUserId], references: [id], onDelete: Cascade)
+
+  @@map("announcements")
+}
+
+model Discussion {
+  id           String            @id @default(cuid())
+  title        String
+  contextType  DiscussionContext @default(GENERAL)
+  plotId       String?
+  taskId       String?
+  authorUserId String
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  author   User      @relation(fields: [authorUserId], references: [id], onDelete: Cascade)
+  plot     Plot?     @relation(fields: [plotId], references: [id], onDelete: SetNull)
+  task     Task?     @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  comments Comment[]
+
+  @@map("discussions")
+}
+
+model Comment {
+  id           String   @id @default(cuid())
+  discussionId String
+  authorUserId String
+  body         String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  discussion Discussion @relation(fields: [discussionId], references: [id], onDelete: Cascade)
+  author     User       @relation(fields: [authorUserId], references: [id], onDelete: Cascade)
+
+  @@map("comments")
+}
