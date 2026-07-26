@@ -33,6 +33,9 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
             <Link href="/announcements" className="hover:text-green-700 dark:hover:text-green-400">
               Announcements
             </Link>
+            <Link href="/discussions" className="hover:text-green-700 dark:hover:text-green-400">
+              Discussions
+            </Link>
             {session.user.role === "ADMIN" && (
               <Link href="/admin" className="hover:text-green-700 dark:hover:text-green-400">
                 Admin

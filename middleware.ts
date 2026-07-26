@@ -8,6 +8,7 @@ export const config = {
     "/schedule/:path*",
     "/plants/:path*",
     "/announcements/:path*",
+    "/discussions/:path*",
     "/admin/:path*",
   ],
 };
