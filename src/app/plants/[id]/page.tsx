@@ -15,8 +15,32 @@ export default async function PlantDetailPage({
   const plantId = parseInt(id, 10);
   if (isNaN(plantId)) notFound();
 
-  const plant = await getPlantById(plantId);
-  if (!plant) notFound();
+  const result = await getPlantById(plantId);
+  if ("error" in result) {
+    if (result.error === "not_found") notFound();
+    return (
+      <AppShell>
+        <div className="mb-6">
+          <Link
+            href="/plants"
+            className="text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300"
+          >
+            &larr; Back to search
+          </Link>
+        </div>
+        <div className="rounded-lg border border-zinc-200 bg-white px-6 py-16 text-center dark:border-zinc-800 dark:bg-zinc-900">
+          <p className="text-lg font-medium text-zinc-500 dark:text-zinc-400">
+            Detailed info not available on the free plan
+          </p>
+          <p className="mt-1 text-sm text-zinc-400 dark:text-zinc-500">
+            This plant&apos;s details require a premium Perenual API subscription.
+          </p>
+        </div>
+      </AppShell>
+    );
+  }
+
+  const plant = result.plant;
 
   return (
     <AppShell>

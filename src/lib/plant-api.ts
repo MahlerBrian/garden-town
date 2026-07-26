@@ -65,15 +65,30 @@ export async function searchPlants(
   };
 }
 
-export async function getPlantById(id: number): Promise<PlantDetail | null> {
+export async function getPlantById(
+  id: number
+): Promise<{ plant: PlantDetail } | { error: "not_found" | "upgrade_required" }> {
   const key = getApiKey();
   const url = `${PERENUAL_BASE}/species/details/${id}?key=${key}`;
   const res = await fetch(url, { next: { revalidate: 86400 } });
 
-  if (!res.ok) return null;
+  if (res.status === 429) return { error: "upgrade_required" };
+  if (!res.ok) return { error: "not_found" };
 
   const json = await res.json();
-  return mapDetail(json);
+  return { plant: mapDetail(json) };
+}
+
+function isUpgradePlaceholder(url: string) {
+  return url.includes("upgrade_access");
+}
+
+function extractImage(raw: { thumbnail?: string; small_url?: string; regular_url?: string; medium_url?: string } | null) {
+  if (!raw) return null;
+  const thumbnail = raw.thumbnail ?? raw.small_url ?? "";
+  const regular = raw.regular_url ?? raw.medium_url ?? "";
+  if (isUpgradePlaceholder(thumbnail) || isUpgradePlaceholder(regular)) return null;
+  return { thumbnail, regular_url: regular };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -85,12 +100,7 @@ function mapSummary(raw: any): PlantSummary {
     cycle: raw.cycle ?? null,
     watering: raw.watering ?? null,
     sunlight: Array.isArray(raw.sunlight) ? raw.sunlight : [],
-    default_image: raw.default_image
-      ? {
-          thumbnail: raw.default_image.thumbnail ?? raw.default_image.small_url ?? "",
-          regular_url: raw.default_image.regular_url ?? raw.default_image.medium_url ?? "",
-        }
-      : null,
+    default_image: extractImage(raw.default_image),
   };
 }
 
@@ -121,12 +131,7 @@ function mapDetail(raw: any): PlantDetail {
     edible_fruit: raw.edible_fruit ?? false,
     harvest_season: raw.harvest_season ?? null,
     description: raw.description ?? null,
-    default_image: raw.default_image
-      ? {
-          thumbnail: raw.default_image.thumbnail ?? raw.default_image.small_url ?? "",
-          regular_url: raw.default_image.regular_url ?? raw.default_image.medium_url ?? "",
-        }
-      : null,
+    default_image: extractImage(raw.default_image),
     companions: Array.isArray(raw.companions) ? raw.companions : null,
   };
 }
