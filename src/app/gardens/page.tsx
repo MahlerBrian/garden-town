@@ -23,19 +23,27 @@ export default async function GardensPage() {
     orderBy: { garden: { name: "asc" } },
   });
 
-  const allGardens = await db.garden.findMany({
-    where: {
-      id: { notIn: memberships.map((m) => m.gardenId) },
-    },
-    select: {
-      id: true,
-      name: true,
-      slug: true,
-      description: true,
-      _count: { select: { memberships: true, plots: true } },
-    },
-    orderBy: { name: "asc" },
-  });
+  const memberGardenIds = memberships.map((m) => m.gardenId);
+
+  const [allGardens, pendingRequests] = await Promise.all([
+    db.garden.findMany({
+      where: { id: { notIn: memberGardenIds } },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        description: true,
+        _count: { select: { memberships: true, plots: true } },
+      },
+      orderBy: { name: "asc" },
+    }),
+    db.joinRequest.findMany({
+      where: { userId: session.user.id, status: "PENDING" },
+      select: { gardenId: true },
+    }),
+  ]);
+
+  const pendingGardenIds = new Set(pendingRequests.map((r) => r.gardenId));
 
   return (
     <div className="min-h-full bg-zinc-50 dark:bg-zinc-950">
@@ -150,7 +158,11 @@ export default async function GardensPage() {
                     <span>{g._count.plots} plots</span>
                   </div>
                   <div className="mt-4">
-                    <GardenSwitchButton gardenId={g.id} isJoin />
+                    <GardenSwitchButton
+                      gardenId={g.id}
+                      isJoin
+                      requestStatus={pendingGardenIds.has(g.id) ? "PENDING" : null}
+                    />
                   </div>
                 </div>
               ))}

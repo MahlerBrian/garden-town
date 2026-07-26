@@ -61,34 +61,107 @@ export async function switchGarden(gardenId: string) {
   return {};
 }
 
-export async function joinGarden(gardenId: string) {
+export async function requestToJoinGarden(gardenId: string, message?: string) {
   const session = await auth();
   if (!session?.user?.id) return { error: "Not authenticated" };
 
   const garden = await db.garden.findUnique({ where: { id: gardenId } });
   if (!garden) return { error: "Garden not found" };
 
-  const existing = await db.gardenMembership.findUnique({
-    where: {
-      userId_gardenId: { userId: session.user.id, gardenId },
-    },
+  const existingMembership = await db.gardenMembership.findUnique({
+    where: { userId_gardenId: { userId: session.user.id, gardenId } },
   });
-  if (existing) return { error: "You are already a member" };
+  if (existingMembership) return { error: "You are already a member" };
 
-  await db.gardenMembership.create({
+  const existingRequest = await db.joinRequest.findUnique({
+    where: { userId_gardenId: { userId: session.user.id, gardenId } },
+  });
+  if (existingRequest?.status === "PENDING") {
+    return { error: "You already have a pending request" };
+  }
+  if (existingRequest?.status === "REJECTED") {
+    await db.joinRequest.update({
+      where: { id: existingRequest.id },
+      data: { status: "PENDING", message: message || null },
+    });
+    revalidatePath("/gardens");
+    return { requested: true };
+  }
+
+  await db.joinRequest.create({
     data: {
       userId: session.user.id,
       gardenId,
-      role: "GARDENER",
+      message: message || null,
     },
   });
 
-  await db.user.update({
-    where: { id: session.user.id },
-    data: { activeGardenId: gardenId },
+  revalidatePath("/gardens");
+  return { requested: true };
+}
+
+export async function approveJoinRequest(requestId: string) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Not authenticated" };
+
+  const joinRequest = await db.joinRequest.findUnique({
+    where: { id: requestId },
+  });
+  if (!joinRequest || joinRequest.status !== "PENDING") {
+    return { error: "Request not found or already handled" };
+  }
+
+  const myMembership = await db.gardenMembership.findUnique({
+    where: { userId_gardenId: { userId: session.user.id, gardenId: joinRequest.gardenId } },
+  });
+  if (!myMembership || myMembership.role !== "ADMIN") {
+    return { error: "Only garden admins can approve requests" };
+  }
+
+  await db.$transaction([
+    db.joinRequest.update({
+      where: { id: requestId },
+      data: { status: "APPROVED" },
+    }),
+    db.gardenMembership.create({
+      data: {
+        userId: joinRequest.userId,
+        gardenId: joinRequest.gardenId,
+        role: "GARDENER",
+      },
+    }),
+  ]);
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/members");
+  revalidatePath("/members");
+  return {};
+}
+
+export async function rejectJoinRequest(requestId: string) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Not authenticated" };
+
+  const joinRequest = await db.joinRequest.findUnique({
+    where: { id: requestId },
+  });
+  if (!joinRequest || joinRequest.status !== "PENDING") {
+    return { error: "Request not found or already handled" };
+  }
+
+  const myMembership = await db.gardenMembership.findUnique({
+    where: { userId_gardenId: { userId: session.user.id, gardenId: joinRequest.gardenId } },
+  });
+  if (!myMembership || myMembership.role !== "ADMIN") {
+    return { error: "Only garden admins can reject requests" };
+  }
+
+  await db.joinRequest.update({
+    where: { id: requestId },
+    data: { status: "REJECTED" },
   });
 
-  revalidatePath("/gardens");
+  revalidatePath("/admin");
   return {};
 }
 

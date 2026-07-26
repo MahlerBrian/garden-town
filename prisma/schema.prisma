@@ -61,6 +61,12 @@ enum DiscussionContext {
   GENERAL
 }
 
+enum JoinRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 // ─── Models ──────────────────────────────────────────────
 
 model Garden {
@@ -72,6 +78,7 @@ model Garden {
   updatedAt   DateTime @updatedAt
 
   memberships   GardenMembership[]
+  joinRequests  JoinRequest[]
   plots         Plot[]
   tasks         Task[]
   announcements Announcement[]
@@ -109,6 +116,7 @@ model User {
 
   activeGarden  Garden?            @relation("ActiveGarden", fields: [activeGardenId], references: [id], onDelete: SetNull)
   memberships   GardenMembership[]
+  joinRequests  JoinRequest[]
   plots         Plot[]
   plantingLogs  PlantingLog[]
   createdTasks  Task[]             @relation("TaskCreator")
@@ -240,4 +248,20 @@ model Comment {
   author     User       @relation(fields: [authorUserId], references: [id], onDelete: Cascade)
 
   @@map("comments")
+}
+
+model JoinRequest {
+  id        String            @id @default(cuid())
+  userId    String
+  gardenId  String
+  message   String?
+  status    JoinRequestStatus @default(PENDING)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  garden Garden @relation(fields: [gardenId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, gardenId])
+  @@map("join_requests")
 }

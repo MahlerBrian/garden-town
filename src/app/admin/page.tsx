@@ -18,6 +18,7 @@ export default async function AdminPage() {
     discussionCount,
     commentCount,
     recentUsers,
+    pendingRequestCount,
   ] = await Promise.all([
     db.gardenMembership.count({ where: { gardenId } }),
     db.plot.groupBy({ by: ["status"], where: { gardenId }, _count: true }),
@@ -33,6 +34,7 @@ export default async function AdminPage() {
       orderBy: { user: { joinDate: "desc" } },
       take: 5,
     }),
+    db.joinRequest.count({ where: { gardenId, status: "PENDING" } }),
   ]);
 
   const plotCountMap = Object.fromEntries(
@@ -152,7 +154,21 @@ export default async function AdminPage() {
       </div>
 
       {/* Admin sections nav */}
-      <div className="mt-8 grid gap-4 sm:grid-cols-3">
+      <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Link
+          href="/admin/requests"
+          className="relative rounded-lg border border-zinc-200 bg-white p-6 text-center transition-shadow hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900"
+        >
+          <p className="text-lg font-semibold">Join Requests</p>
+          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+            Review and approve requests
+          </p>
+          {pendingRequestCount > 0 && (
+            <span className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">
+              {pendingRequestCount}
+            </span>
+          )}
+        </Link>
         <Link
           href="/admin/members"
           className="rounded-lg border border-zinc-200 bg-white p-6 text-center transition-shadow hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900"

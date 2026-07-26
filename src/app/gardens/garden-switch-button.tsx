@@ -2,26 +2,41 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { switchGarden, joinGarden } from "@/lib/garden-actions";
+import { switchGarden, requestToJoinGarden } from "@/lib/garden-actions";
 
 export function GardenSwitchButton({
   gardenId,
   isJoin = false,
+  requestStatus,
 }: {
   gardenId: string;
   isJoin?: boolean;
+  requestStatus?: "PENDING" | "REJECTED" | null;
 }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
+  const [requested, setRequested] = useState(requestStatus === "PENDING");
 
   async function handleClick() {
     setPending(true);
     if (isJoin) {
-      await joinGarden(gardenId);
+      const result = await requestToJoinGarden(gardenId);
+      if (result.requested) {
+        setRequested(true);
+      }
+      setPending(false);
     } else {
       await switchGarden(gardenId);
+      router.push("/dashboard");
     }
-    router.push("/dashboard");
+  }
+
+  if (requested) {
+    return (
+      <span className="inline-block rounded-md border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-400">
+        Request Pending
+      </span>
+    );
   }
 
   return (
@@ -34,7 +49,7 @@ export function GardenSwitchButton({
           : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
       }`}
     >
-      {pending ? "..." : isJoin ? "Join Garden" : "Switch to this garden"}
+      {pending ? "..." : isJoin ? "Request to Join" : "Switch to this garden"}
     </button>
   );
 }
