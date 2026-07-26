@@ -17,7 +17,6 @@ export default async function GardensPage() {
     where: { userId: session.user.id },
     include: {
       garden: {
-        select: { id: true, name: true, slug: true, description: true },
         include: { _count: { select: { memberships: true, plots: true } } },
       },
     },
