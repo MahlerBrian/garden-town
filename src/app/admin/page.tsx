@@ -1,13 +1,14 @@
 import Link from "next/link";
-import { auth } from "@/lib/auth";
-import { redirect } from "next/navigation";
+import { getActiveGarden } from "@/lib/garden";
 import { db } from "@/lib/db";
 import { AppShell } from "@/components/app-shell";
 
 export default async function AdminPage() {
-  const session = await auth();
-  if (!session?.user) redirect("/login");
-  if (session.user.role !== "ADMIN") redirect("/dashboard");
+  const { gardenId, role } = await getActiveGarden();
+  if (role !== "ADMIN" && role !== "COORDINATOR") {
+    const { redirect } = await import("next/navigation");
+    redirect("/dashboard");
+  }
 
   const [
     userCount,
@@ -18,15 +19,18 @@ export default async function AdminPage() {
     commentCount,
     recentUsers,
   ] = await Promise.all([
-    db.user.count(),
-    db.plot.groupBy({ by: ["status"], _count: true }),
-    db.task.count(),
-    db.announcement.count(),
-    db.discussion.count(),
-    db.comment.count(),
-    db.user.findMany({
-      select: { id: true, name: true, email: true, role: true, joinDate: true },
-      orderBy: { joinDate: "desc" },
+    db.gardenMembership.count({ where: { gardenId } }),
+    db.plot.groupBy({ by: ["status"], where: { gardenId }, _count: true }),
+    db.task.count({ where: { gardenId } }),
+    db.announcement.count({ where: { gardenId } }),
+    db.discussion.count({ where: { gardenId } }),
+    db.comment.count({
+      where: { discussion: { gardenId } },
+    }),
+    db.gardenMembership.findMany({
+      where: { gardenId },
+      include: { user: { select: { id: true, name: true, email: true, joinDate: true } } },
+      orderBy: { user: { joinDate: "desc" } },
       take: 5,
     }),
   ]);
@@ -36,8 +40,9 @@ export default async function AdminPage() {
   );
   const totalPlots = plotCounts.reduce((s, c) => s + c._count, 0);
 
-  const roleCounts = await db.user.groupBy({
+  const roleCounts = await db.gardenMembership.groupBy({
     by: ["role"],
+    where: { gardenId },
     _count: true,
   });
   const roleCountMap = Object.fromEntries(
@@ -125,16 +130,16 @@ export default async function AdminPage() {
             Newest Members
           </h3>
           <ul className="space-y-2">
-            {recentUsers.map((u) => (
-              <li key={u.id} className="flex items-center justify-between text-sm">
+            {recentUsers.map((m) => (
+              <li key={m.user.id} className="flex items-center justify-between text-sm">
                 <Link
-                  href={`/members/${u.id}`}
+                  href={`/members/${m.user.id}`}
                   className="font-medium hover:text-green-700 dark:hover:text-green-400"
                 >
-                  {u.name}
+                  {m.user.name}
                 </Link>
                 <span className="text-xs text-zinc-400 dark:text-zinc-500">
-                  {u.joinDate.toLocaleDateString("en-US", {
+                  {m.user.joinDate.toLocaleDateString("en-US", {
                     month: "short",
                     day: "numeric",
                     year: "numeric",

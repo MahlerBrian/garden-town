@@ -1,6 +1,5 @@
 import Link from "next/link";
-import { auth } from "@/lib/auth";
-import { redirect } from "next/navigation";
+import { getActiveGarden } from "@/lib/garden";
 import { searchPlants } from "@/lib/plant-api";
 import { AppShell } from "@/components/app-shell";
 
@@ -9,8 +8,7 @@ export default async function PlantsPage({
 }: {
   searchParams: Promise<{ q?: string; page?: string }>;
 }) {
-  const session = await auth();
-  if (!session?.user) redirect("/login");
+  await getActiveGarden();
 
   const { q, page } = await searchParams;
   const query = q ?? "";

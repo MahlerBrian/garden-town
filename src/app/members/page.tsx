@@ -1,6 +1,5 @@
 import Link from "next/link";
-import { auth } from "@/lib/auth";
-import { redirect } from "next/navigation";
+import { getActiveGarden } from "@/lib/garden";
 import { db } from "@/lib/db";
 import { AppShell } from "@/components/app-shell";
 
@@ -9,42 +8,50 @@ export default async function MembersPage({
 }: {
   searchParams: Promise<{ role?: string; q?: string }>;
 }) {
-  const session = await auth();
-  if (!session?.user) redirect("/login");
+  const { gardenId, userId, role: myRole } = await getActiveGarden();
 
   const { role, q } = await searchParams;
   const validRoles = ["GARDENER", "COORDINATOR", "ADMIN"];
   const filterRole = role && validRoles.includes(role) ? role : null;
 
-  const members = await db.user.findMany({
+  const memberships = await db.gardenMembership.findMany({
     where: {
+      gardenId,
       ...(filterRole
         ? { role: filterRole as "GARDENER" | "COORDINATOR" | "ADMIN" }
         : {}),
       ...(q
         ? {
-            OR: [
-              { name: { contains: q, mode: "insensitive" as const } },
-              { email: { contains: q, mode: "insensitive" as const } },
-            ],
+            user: {
+              OR: [
+                { name: { contains: q, mode: "insensitive" as const } },
+                { email: { contains: q, mode: "insensitive" as const } },
+              ],
+            },
           }
         : {}),
     },
-    orderBy: { name: "asc" },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      role: true,
-      profileImage: true,
-      joinDate: true,
-      contactVisibility: true,
-      _count: { select: { plots: true, taskSignups: true } },
+    include: {
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          profileImage: true,
+          joinDate: true,
+          contactVisibility: true,
+          _count: { select: { plots: true, taskSignups: true } },
+        },
+      },
     },
+    orderBy: { user: { name: "asc" } },
   });
 
-  const counts = await db.user.groupBy({
+  const members = memberships.map((m) => ({ ...m.user, role: m.role }));
+
+  const counts = await db.gardenMembership.groupBy({
     by: ["role"],
+    where: { gardenId },
     _count: true,
   });
   const countMap = Object.fromEntries(counts.map((c) => [c.role, c._count]));
@@ -103,9 +110,9 @@ export default async function MembersPage({
           {members.map((member) => {
             const showEmail =
               member.contactVisibility === "PUBLIC" ||
-              (member.contactVisibility === "MEMBERS_ONLY" && session.user) ||
-              member.id === session.user.id ||
-              session.user.role === "ADMIN";
+              member.contactVisibility === "MEMBERS_ONLY" ||
+              member.id === userId ||
+              myRole === "ADMIN";
 
             return (
               <Link

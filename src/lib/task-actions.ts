@@ -1,15 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { auth } from "./auth";
+import { getActiveGarden, requireGardenRole } from "./garden";
 import { db } from "./db";
 
 export async function createTask(formData: FormData) {
-  const session = await auth();
-  if (!session?.user) return { error: "Not authenticated." };
-  if (session.user.role !== "COORDINATOR" && session.user.role !== "ADMIN") {
-    return { error: "Only coordinators and admins can create tasks." };
-  }
+  const ctx = await requireGardenRole(["COORDINATOR", "ADMIN"]);
+  if (ctx.error) return { error: ctx.error };
 
   const title = formData.get("title") as string;
   const description = formData.get("description") as string;
@@ -38,7 +35,8 @@ export async function createTask(formData: FormData) {
       category: category as "WATERING" | "WEEDING" | "HARVESTING" | "MAINTENANCE" | "EVENT",
       date: new Date(date),
       recurrence: recurrence as "DAILY" | "WEEKLY" | "BIWEEKLY" | "MONTHLY" | null,
-      createdByUserId: session.user.id,
+      gardenId: ctx.gardenId,
+      createdByUserId: ctx.userId,
     },
   });
 
@@ -48,11 +46,11 @@ export async function createTask(formData: FormData) {
 }
 
 export async function deleteTask(taskId: string) {
-  const session = await auth();
-  if (!session?.user) return { error: "Not authenticated." };
-  if (session.user.role !== "COORDINATOR" && session.user.role !== "ADMIN") {
-    return { error: "Only coordinators and admins can delete tasks." };
-  }
+  const ctx = await requireGardenRole(["COORDINATOR", "ADMIN"]);
+  if (ctx.error) return { error: ctx.error };
+
+  const task = await db.task.findUnique({ where: { id: taskId } });
+  if (!task || task.gardenId !== ctx.gardenId) return { error: "Task not found." };
 
   await db.task.delete({ where: { id: taskId } });
 
@@ -62,16 +60,18 @@ export async function deleteTask(taskId: string) {
 }
 
 export async function signUpForTask(taskId: string) {
-  const session = await auth();
-  if (!session?.user) return { error: "Not authenticated." };
+  const { gardenId, userId } = await getActiveGarden();
+
+  const task = await db.task.findUnique({ where: { id: taskId } });
+  if (!task || task.gardenId !== gardenId) return { error: "Task not found." };
 
   const existing = await db.taskSignup.findUnique({
-    where: { taskId_userId: { taskId, userId: session.user.id } },
+    where: { taskId_userId: { taskId, userId } },
   });
   if (existing) return { error: "You're already signed up for this task." };
 
   await db.taskSignup.create({
-    data: { taskId, userId: session.user.id },
+    data: { taskId, userId },
   });
 
   revalidatePath("/schedule");
@@ -81,11 +81,10 @@ export async function signUpForTask(taskId: string) {
 }
 
 export async function withdrawFromTask(taskId: string) {
-  const session = await auth();
-  if (!session?.user) return { error: "Not authenticated." };
+  const { userId } = await getActiveGarden();
 
   await db.taskSignup.delete({
-    where: { taskId_userId: { taskId, userId: session.user.id } },
+    where: { taskId_userId: { taskId, userId } },
   });
 
   revalidatePath("/schedule");
@@ -99,11 +98,8 @@ export async function updateSignupStatus(
   userId: string,
   status: "COMPLETED" | "NO_SHOW"
 ) {
-  const session = await auth();
-  if (!session?.user) return { error: "Not authenticated." };
-  if (session.user.role !== "COORDINATOR" && session.user.role !== "ADMIN") {
-    return { error: "Only coordinators and admins can update signup status." };
-  }
+  const ctx = await requireGardenRole(["COORDINATOR", "ADMIN"]);
+  if (ctx.error) return { error: ctx.error };
 
   await db.taskSignup.update({
     where: { taskId_userId: { taskId, userId } },

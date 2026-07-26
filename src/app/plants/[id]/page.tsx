@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
+import { notFound } from "next/navigation";
+import { getActiveGarden } from "@/lib/garden";
 import { getPlantById } from "@/lib/plant-api";
 import { AppShell } from "@/components/app-shell";
 
@@ -9,8 +9,7 @@ export default async function PlantDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const session = await auth();
-  if (!session?.user) redirect("/login");
+  await getActiveGarden();
 
   const { id } = await params;
   const plantId = parseInt(id, 10);

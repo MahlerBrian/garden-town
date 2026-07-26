@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { auth } from "@/lib/auth";
+import { getActiveGarden } from "@/lib/garden";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { AppShell } from "@/components/app-shell";
@@ -8,11 +8,11 @@ import { AdminDeletePlot } from "./admin-delete-plot";
 import { AdminCreatePlot } from "./admin-create-plot";
 
 export default async function AdminPlotsPage() {
-  const session = await auth();
-  if (!session?.user) redirect("/login");
-  if (session.user.role !== "ADMIN") redirect("/dashboard");
+  const { gardenId, role } = await getActiveGarden();
+  if (role !== "ADMIN") redirect("/dashboard");
 
   const plots = await db.plot.findMany({
+    where: { gardenId },
     include: {
       assignedUser: { select: { id: true, name: true } },
       _count: { select: { plantingLogs: true } },

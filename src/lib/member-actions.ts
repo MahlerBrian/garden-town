@@ -1,19 +1,18 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { auth } from "./auth";
+import { getActiveGarden } from "./garden";
 import { db } from "./db";
 
 export async function updateMemberRole(
   userId: string,
   role: "GARDENER" | "COORDINATOR" | "ADMIN"
 ) {
-  const session = await auth();
-  if (!session?.user) return { error: "Not authenticated." };
-  if (session.user.role !== "ADMIN") {
-    return { error: "Only admins can change member roles." };
+  const ctx = await getActiveGarden();
+  if (ctx.role !== "ADMIN") {
+    return { error: "Only garden admins can change member roles." };
   }
-  if (userId === session.user.id) {
+  if (userId === ctx.userId) {
     return { error: "You cannot change your own role." };
   }
 
@@ -22,27 +21,27 @@ export async function updateMemberRole(
     return { error: "Invalid role." };
   }
 
-  await db.user.update({
-    where: { id: userId },
+  await db.gardenMembership.update({
+    where: { userId_gardenId: { userId, gardenId: ctx.gardenId } },
     data: { role },
   });
 
   revalidatePath("/members");
   revalidatePath(`/members/${userId}`);
+  revalidatePath("/admin/members");
   return { success: true };
 }
 
 export async function updateContactVisibility(
   visibility: "PUBLIC" | "MEMBERS_ONLY" | "PRIVATE"
-) {
-  const session = await auth();
-  if (!session?.user) return { error: "Not authenticated." };
+): Promise<{ success?: boolean; error?: string }> {
+  const { userId } = await getActiveGarden();
 
   await db.user.update({
-    where: { id: session.user.id },
+    where: { id: userId },
     data: { contactVisibility: visibility },
   });
 
-  revalidatePath(`/members/${session.user.id}`);
+  revalidatePath(`/members/${userId}`);
   return { success: true };
 }

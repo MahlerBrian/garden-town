@@ -1,20 +1,19 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { auth } from "./auth";
+import { getActiveGarden, requireGardenRole } from "./garden";
 import { db } from "./db";
 
 export async function requestPlot(plotId: string) {
-  const session = await auth();
-  if (!session?.user) return { error: "Not authenticated." };
+  const { gardenId, userId } = await getActiveGarden();
 
   const plot = await db.plot.findUnique({ where: { id: plotId } });
-  if (!plot) return { error: "Plot not found." };
+  if (!plot || plot.gardenId !== gardenId) return { error: "Plot not found." };
   if (plot.status !== "AVAILABLE") return { error: "Plot is not available." };
 
   await db.plot.update({
     where: { id: plotId },
-    data: { status: "RESERVED", assignedUserId: session.user.id },
+    data: { status: "RESERVED", assignedUserId: userId },
   });
 
   revalidatePath("/plots");
@@ -24,11 +23,11 @@ export async function requestPlot(plotId: string) {
 }
 
 export async function assignPlot(plotId: string, userId: string) {
-  const session = await auth();
-  if (!session?.user) return { error: "Not authenticated." };
-  if (session.user.role !== "COORDINATOR" && session.user.role !== "ADMIN") {
-    return { error: "Only coordinators and admins can assign plots." };
-  }
+  const ctx = await requireGardenRole(["COORDINATOR", "ADMIN"]);
+  if (ctx.error) return { error: ctx.error };
+
+  const plot = await db.plot.findUnique({ where: { id: plotId } });
+  if (!plot || plot.gardenId !== ctx.gardenId) return { error: "Plot not found." };
 
   await db.plot.update({
     where: { id: plotId },
@@ -41,14 +40,13 @@ export async function assignPlot(plotId: string, userId: string) {
 }
 
 export async function releasePlot(plotId: string) {
-  const session = await auth();
-  if (!session?.user) return { error: "Not authenticated." };
+  const { gardenId, userId, role } = await getActiveGarden();
 
   const plot = await db.plot.findUnique({ where: { id: plotId } });
-  if (!plot) return { error: "Plot not found." };
+  if (!plot || plot.gardenId !== gardenId) return { error: "Plot not found." };
 
-  const isOwner = plot.assignedUserId === session.user.id;
-  const isStaff = session.user.role === "COORDINATOR" || session.user.role === "ADMIN";
+  const isOwner = plot.assignedUserId === userId;
+  const isStaff = role === "COORDINATOR" || role === "ADMIN";
   if (!isOwner && !isStaff) {
     return { error: "You don't have permission to release this plot." };
   }
@@ -65,8 +63,7 @@ export async function releasePlot(plotId: string) {
 }
 
 export async function addPlantingLog(formData: FormData) {
-  const session = await auth();
-  if (!session?.user) return { error: "Not authenticated." };
+  const { userId } = await getActiveGarden();
 
   const plotId = formData.get("plotId") as string;
   const plantName = formData.get("plantName") as string;
@@ -79,14 +76,14 @@ export async function addPlantingLog(formData: FormData) {
 
   const plot = await db.plot.findUnique({ where: { id: plotId } });
   if (!plot) return { error: "Plot not found." };
-  if (plot.assignedUserId !== session.user.id) {
+  if (plot.assignedUserId !== userId) {
     return { error: "You can only log plants in your own plots." };
   }
 
   await db.plantingLog.create({
     data: {
       plotId,
-      userId: session.user.id,
+      userId,
       plantName,
       datePlanted: new Date(datePlanted),
       notes: notes || null,
@@ -98,12 +95,11 @@ export async function addPlantingLog(formData: FormData) {
 }
 
 export async function harvestPlantingLog(logId: string) {
-  const session = await auth();
-  if (!session?.user) return { error: "Not authenticated." };
+  const { userId } = await getActiveGarden();
 
   const log = await db.plantingLog.findUnique({ where: { id: logId } });
   if (!log) return { error: "Log entry not found." };
-  if (log.userId !== session.user.id) {
+  if (log.userId !== userId) {
     return { error: "You can only update your own planting logs." };
   }
 

@@ -33,7 +33,7 @@ export async function register(formData: FormData) {
     await signIn("credentials", {
       email,
       password,
-      redirectTo: "/dashboard",
+      redirectTo: "/gardens",
     });
   } catch (error) {
     if (error instanceof AuthError) {
@@ -55,7 +55,7 @@ export async function login(formData: FormData) {
     await signIn("credentials", {
       email,
       password,
-      redirectTo: "/dashboard",
+      redirectTo: "/gardens",
     });
   } catch (error) {
     if (error instanceof AuthError) {

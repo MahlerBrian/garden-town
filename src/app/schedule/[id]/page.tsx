@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
+import { notFound } from "next/navigation";
+import { getActiveGarden } from "@/lib/garden";
 import { db } from "@/lib/db";
 import { AppShell } from "@/components/app-shell";
 import { TaskSignupButton } from "../task-signup-button";
@@ -11,8 +11,7 @@ export default async function TaskDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const session = await auth();
-  if (!session?.user) redirect("/login");
+  const { gardenId, userId, role } = await getActiveGarden();
 
   const { id } = await params;
   const task = await db.task.findUnique({
@@ -26,11 +25,11 @@ export default async function TaskDetailPage({
     },
   });
 
-  if (!task) notFound();
+  if (!task || task.gardenId !== gardenId) notFound();
 
-  const isStaff = session.user.role === "COORDINATOR" || session.user.role === "ADMIN";
+  const isStaff = role === "COORDINATOR" || role === "ADMIN";
   const isPast = new Date(task.date) < new Date();
-  const isSignedUp = task.signups.some((s) => s.userId === session.user.id);
+  const isSignedUp = task.signups.some((s) => s.userId === userId);
 
   return (
     <AppShell>
@@ -117,7 +116,7 @@ export default async function TaskDetailPage({
                             className="font-medium hover:text-green-700 dark:hover:text-green-400"
                           >
                             {signup.user.name}
-                            {signup.userId === session.user.id && (
+                            {signup.userId === userId && (
                               <span className="ml-1 text-xs text-zinc-400">(you)</span>
                             )}
                           </Link>

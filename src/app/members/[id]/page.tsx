@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
+import { notFound } from "next/navigation";
+import { getActiveGarden } from "@/lib/garden";
 import { db } from "@/lib/db";
 import { AppShell } from "@/components/app-shell";
 import { RoleManager } from "./role-manager";
@@ -11,8 +11,7 @@ export default async function MemberDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const session = await auth();
-  if (!session?.user) redirect("/login");
+  const { gardenId, userId, role: myRole } = await getActiveGarden();
 
   const { id } = await params;
   const member = await db.user.findUnique({
@@ -43,12 +42,18 @@ export default async function MemberDetailPage({
 
   if (!member) notFound();
 
-  const isSelf = member.id === session.user.id;
-  const isAdmin = session.user.role === "ADMIN";
+  const membership = await db.gardenMembership.findUnique({
+    where: { userId_gardenId: { userId: member.id, gardenId } },
+  });
+  if (!membership) notFound();
+
+  const isSelf = member.id === userId;
+  const isAdmin = myRole === "ADMIN";
+  const memberRole = membership.role;
 
   const showEmail =
     member.contactVisibility === "PUBLIC" ||
-    (member.contactVisibility === "MEMBERS_ONLY" && session.user) ||
+    member.contactVisibility === "MEMBERS_ONLY" ||
     isSelf ||
     isAdmin;
 
@@ -79,7 +84,7 @@ export default async function MemberDetailPage({
               <div>
                 <div className="flex items-center gap-2">
                   <h1 className="text-2xl font-semibold">{member.name}</h1>
-                  <RoleBadge role={member.role} />
+                  <RoleBadge role={memberRole} />
                   {isSelf && (
                     <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
                       You
@@ -186,7 +191,7 @@ export default async function MemberDetailPage({
           {isAdmin && !isSelf && (
             <section className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
               <h2 className="mb-3 font-semibold">Role Management</h2>
-              <RoleManager userId={member.id} currentRole={member.role} />
+              <RoleManager userId={member.id} currentRole={memberRole} />
             </section>
           )}
 

@@ -1,6 +1,5 @@
 import Link from "next/link";
-import { auth } from "@/lib/auth";
-import { redirect } from "next/navigation";
+import { getActiveGarden } from "@/lib/garden";
 import { db } from "@/lib/db";
 import { AppShell } from "@/components/app-shell";
 import { TaskSignupButton } from "./task-signup-button";
@@ -10,8 +9,7 @@ export default async function SchedulePage({
 }: {
   searchParams: Promise<{ category?: string; past?: string }>;
 }) {
-  const session = await auth();
-  if (!session?.user) redirect("/login");
+  const { gardenId, userId, role } = await getActiveGarden();
 
   const { category, past } = await searchParams;
   const validCategories = ["WATERING", "WEEDING", "HARVESTING", "MAINTENANCE", "EVENT"];
@@ -20,6 +18,7 @@ export default async function SchedulePage({
 
   const tasks = await db.task.findMany({
     where: {
+      gardenId,
       ...(filterCategory
         ? { category: filterCategory as "WATERING" | "WEEDING" | "HARVESTING" | "MAINTENANCE" | "EVENT" }
         : {}),
@@ -33,20 +32,20 @@ export default async function SchedulePage({
   });
 
   const userSignups = await db.taskSignup.findMany({
-    where: { userId: session.user.id },
+    where: { userId },
     select: { taskId: true },
   });
   const signedUpIds = new Set(userSignups.map((s) => s.taskId));
 
   const counts = await db.task.groupBy({
     by: ["category"],
+    where: { gardenId, ...(!showPast ? { date: { gte: new Date() } } : {}) },
     _count: true,
-    ...(!showPast ? { where: { date: { gte: new Date() } } } : {}),
   });
   const countMap = Object.fromEntries(counts.map((c) => [c.category, c._count]));
   const total = counts.reduce((sum, c) => sum + c._count, 0);
 
-  const isStaff = session.user.role === "COORDINATOR" || session.user.role === "ADMIN";
+  const isStaff = role === "COORDINATOR" || role === "ADMIN";
   const pastParam = showPast ? "&past=1" : "";
 
   return (

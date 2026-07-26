@@ -1,22 +1,18 @@
 "use server";
 
-import { auth } from "@/lib/auth";
+import { requireGardenRole } from "./garden";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
-
-async function requireAdmin() {
-  const session = await auth();
-  if (!session?.user?.id) return { error: "Not authenticated", session: null };
-  if (session.user.role !== "ADMIN") return { error: "Admin access required", session: null };
-  return { error: null, session };
-}
 
 export async function updatePlotStatus(
   plotId: string,
   status: "AVAILABLE" | "RESERVED" | "ACTIVE" | "FALLOW"
 ) {
-  const { error } = await requireAdmin();
-  if (error) return { error };
+  const ctx = await requireGardenRole(["ADMIN"]);
+  if (ctx.error) return { error: ctx.error };
+
+  const plot = await db.plot.findUnique({ where: { id: plotId } });
+  if (!plot || plot.gardenId !== ctx.gardenId) return { error: "Plot not found" };
 
   await db.plot.update({
     where: { id: plotId },
@@ -30,8 +26,8 @@ export async function updatePlotStatus(
 }
 
 export async function createPlot(formData: FormData) {
-  const { error } = await requireAdmin();
-  if (error) return { error };
+  const ctx = await requireGardenRole(["ADMIN"]);
+  if (ctx.error) return { error: ctx.error };
 
   const label = (formData.get("label") as string)?.trim();
   const size = (formData.get("size") as string)?.trim();
@@ -52,6 +48,7 @@ export async function createPlot(formData: FormData) {
       size,
       location,
       sunlight: sunlight as "FULL_SUN" | "PARTIAL_SHADE" | "FULL_SHADE",
+      gardenId: ctx.gardenId,
     },
   });
 
@@ -61,11 +58,11 @@ export async function createPlot(formData: FormData) {
 }
 
 export async function deletePlot(plotId: string) {
-  const { error } = await requireAdmin();
-  if (error) return { error };
+  const ctx = await requireGardenRole(["ADMIN"]);
+  if (ctx.error) return { error: ctx.error };
 
   const plot = await db.plot.findUnique({ where: { id: plotId } });
-  if (!plot) return { error: "Plot not found" };
+  if (!plot || plot.gardenId !== ctx.gardenId) return { error: "Plot not found" };
 
   await db.plot.delete({ where: { id: plotId } });
 
@@ -75,14 +72,16 @@ export async function deletePlot(plotId: string) {
 }
 
 export async function deleteUser(userId: string) {
-  const { error, session } = await requireAdmin();
-  if (error || !session) return { error: error ?? "Not authenticated" };
+  const ctx = await requireGardenRole(["ADMIN"]);
+  if (ctx.error) return { error: ctx.error };
 
-  if (userId === session.user.id) {
-    return { error: "You cannot delete your own account" };
+  if (userId === ctx.userId) {
+    return { error: "You cannot remove yourself" };
   }
 
-  await db.user.delete({ where: { id: userId } });
+  await db.gardenMembership.delete({
+    where: { userId_gardenId: { userId, gardenId: ctx.gardenId } },
+  });
 
   revalidatePath("/admin");
   revalidatePath("/members");

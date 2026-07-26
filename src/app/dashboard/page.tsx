@@ -1,21 +1,19 @@
 import Link from "next/link";
-import { auth } from "@/lib/auth";
-import { redirect } from "next/navigation";
+import { getActiveGarden } from "@/lib/garden";
 import { db } from "@/lib/db";
 import { AppShell } from "@/components/app-shell";
 
 export default async function DashboardPage() {
-  const session = await auth();
-  if (!session?.user) redirect("/login");
+  const { gardenId, userId, session } = await getActiveGarden();
 
   const [plots, tasks, announcements] = await Promise.all([
     db.plot.findMany({
-      where: { assignedUserId: session.user.id },
+      where: { gardenId, assignedUserId: userId },
       orderBy: { updatedAt: "desc" },
       take: 4,
     }),
     db.task.findMany({
-      where: { date: { gte: new Date() } },
+      where: { gardenId, date: { gte: new Date() } },
       orderBy: { date: "asc" },
       take: 5,
       include: {
@@ -23,6 +21,7 @@ export default async function DashboardPage() {
       },
     }),
     db.announcement.findMany({
+      where: { gardenId },
       orderBy: { createdAt: "desc" },
       take: 3,
       include: { author: { select: { name: true } } },
@@ -32,7 +31,7 @@ export default async function DashboardPage() {
   const taskSignups = tasks.length
     ? await db.taskSignup.findMany({
         where: {
-          userId: session.user.id,
+          userId,
           taskId: { in: tasks.map((t) => t.id) },
         },
         select: { taskId: true },

@@ -4,14 +4,24 @@ import { db } from "@/lib/db";
 
 export async function GET(request: NextRequest) {
   const session = await auth();
-  if (!session?.user) {
+  if (!session?.user?.id) {
     return NextResponse.json([], { status: 401 });
   }
 
+  const user = await db.user.findUnique({
+    where: { id: session.user.id },
+    select: { activeGardenId: true },
+  });
+  if (!user?.activeGardenId) {
+    return NextResponse.json([]);
+  }
+
+  const gardenId = user.activeGardenId;
   const type = request.nextUrl.searchParams.get("type");
 
   if (type === "plot") {
     const plots = await db.plot.findMany({
+      where: { gardenId },
       select: { id: true, label: true },
       orderBy: { label: "asc" },
     });
@@ -22,6 +32,7 @@ export async function GET(request: NextRequest) {
 
   if (type === "task") {
     const tasks = await db.task.findMany({
+      where: { gardenId },
       select: { id: true, title: true },
       orderBy: { date: "desc" },
       take: 50,

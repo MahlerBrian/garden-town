@@ -1,6 +1,5 @@
 import Link from "next/link";
-import { auth } from "@/lib/auth";
-import { redirect } from "next/navigation";
+import { getActiveGarden } from "@/lib/garden";
 import { db } from "@/lib/db";
 import { AppShell } from "@/components/app-shell";
 import { RequestPlotButton } from "./request-plot-button";
@@ -10,21 +9,24 @@ export default async function PlotsPage({
 }: {
   searchParams: Promise<{ status?: string }>;
 }) {
-  const session = await auth();
-  if (!session?.user) redirect("/login");
+  const { gardenId, userId } = await getActiveGarden();
 
   const { status } = await searchParams;
   const validStatuses = ["AVAILABLE", "RESERVED", "ACTIVE", "FALLOW"];
   const filterStatus = status && validStatuses.includes(status) ? status : null;
 
   const plots = await db.plot.findMany({
-    where: filterStatus ? { status: filterStatus as "AVAILABLE" | "RESERVED" | "ACTIVE" | "FALLOW" } : undefined,
+    where: {
+      gardenId,
+      ...(filterStatus ? { status: filterStatus as "AVAILABLE" | "RESERVED" | "ACTIVE" | "FALLOW" } : {}),
+    },
     orderBy: { label: "asc" },
     include: { assignedUser: { select: { id: true, name: true } } },
   });
 
   const counts = await db.plot.groupBy({
     by: ["status"],
+    where: { gardenId },
     _count: true,
   });
   const countMap = Object.fromEntries(counts.map((c) => [c.status, c._count]));
@@ -108,7 +110,7 @@ export default async function PlotsPage({
                     href={`/members/${plot.assignedUser.id}`}
                     className="font-medium text-zinc-700 hover:text-green-700 dark:text-zinc-300 dark:hover:text-green-400"
                   >
-                    {plot.assignedUser.id === session.user.id
+                    {plot.assignedUser.id === userId
                       ? "you"
                       : plot.assignedUser.name}
                   </Link>

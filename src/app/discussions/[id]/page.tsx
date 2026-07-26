@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
+import { notFound } from "next/navigation";
+import { getActiveGarden } from "@/lib/garden";
 import { db } from "@/lib/db";
 import { AppShell } from "@/components/app-shell";
 import { CommentForm } from "./comment-form";
@@ -19,8 +19,7 @@ export default async function DiscussionDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const session = await auth();
-  if (!session?.user) redirect("/login");
+  const { gardenId, userId, role } = await getActiveGarden();
 
   const { id } = await params;
 
@@ -39,11 +38,10 @@ export default async function DiscussionDetailPage({
     },
   });
 
-  if (!discussion) notFound();
+  if (!discussion || discussion.gardenId !== gardenId) notFound();
 
-  const isStaff =
-    session.user.role === "ADMIN" || session.user.role === "COORDINATOR";
-  const isAuthor = discussion.authorUserId === session.user.id;
+  const isStaff = role === "ADMIN" || role === "COORDINATOR";
+  const isAuthor = discussion.authorUserId === userId;
 
   return (
     <AppShell>
@@ -102,7 +100,7 @@ export default async function DiscussionDetailPage({
               <div className="space-y-3">
                 {discussion.comments.map((comment) => {
                   const canDelete =
-                    comment.authorUserId === session.user!.id || isStaff;
+                    comment.authorUserId === userId || isStaff;
                   return (
                     <div
                       key={comment.id}

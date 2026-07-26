@@ -63,6 +63,37 @@ enum DiscussionContext {
 
 // ─── Models ──────────────────────────────────────────────
 
+model Garden {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  memberships   GardenMembership[]
+  plots         Plot[]
+  tasks         Task[]
+  announcements Announcement[]
+  discussions   Discussion[]
+  activeUsers   User[]             @relation("ActiveGarden")
+
+  @@map("gardens")
+}
+
+model GardenMembership {
+  id       String @id @default(cuid())
+  userId   String
+  gardenId String
+  role     Role   @default(GARDENER)
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  garden Garden @relation(fields: [gardenId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, gardenId])
+  @@map("garden_memberships")
+}
+
 model User {
   id                String            @id @default(cuid())
   name              String
@@ -72,12 +103,15 @@ model User {
   profileImage      String?
   joinDate          DateTime          @default(now())
   contactVisibility ContactVisibility @default(MEMBERS_ONLY)
+  activeGardenId    String?
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
 
+  activeGarden  Garden?            @relation("ActiveGarden", fields: [activeGardenId], references: [id], onDelete: SetNull)
+  memberships   GardenMembership[]
   plots         Plot[]
   plantingLogs  PlantingLog[]
-  createdTasks  Task[]         @relation("TaskCreator")
+  createdTasks  Task[]             @relation("TaskCreator")
   taskSignups   TaskSignup[]
   announcements Announcement[]
   discussions   Discussion[]
@@ -94,10 +128,12 @@ model Plot {
   sunlight       Sunlight   @default(FULL_SUN)
   status         PlotStatus @default(AVAILABLE)
   season         String?
+  gardenId       String
   assignedUserId String?
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 
+  garden       Garden        @relation(fields: [gardenId], references: [id], onDelete: Cascade)
   assignedUser User?         @relation(fields: [assignedUserId], references: [id], onDelete: SetNull)
   plantingLogs PlantingLog[]
   discussions  Discussion[]
@@ -130,10 +166,12 @@ model Task {
   category        TaskCategory
   date            DateTime
   recurrence      Recurrence?
+  gardenId        String
   createdByUserId String
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
+  garden      Garden        @relation(fields: [gardenId], references: [id], onDelete: Cascade)
   createdBy   User          @relation("TaskCreator", fields: [createdByUserId], references: [id], onDelete: Cascade)
   signups     TaskSignup[]
   discussions Discussion[]
@@ -158,12 +196,14 @@ model Announcement {
   id           String   @id @default(cuid())
   title        String
   body         String
+  gardenId     String
   authorUserId String
   pinned       Boolean  @default(false)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  author User @relation(fields: [authorUserId], references: [id], onDelete: Cascade)
+  garden Garden @relation(fields: [gardenId], references: [id], onDelete: Cascade)
+  author User   @relation(fields: [authorUserId], references: [id], onDelete: Cascade)
 
   @@map("announcements")
 }
@@ -172,12 +212,14 @@ model Discussion {
   id           String            @id @default(cuid())
   title        String
   contextType  DiscussionContext @default(GENERAL)
+  gardenId     String
   plotId       String?
   taskId       String?
   authorUserId String
   createdAt    DateTime          @default(now())
   updatedAt    DateTime          @updatedAt
 
+  garden   Garden    @relation(fields: [gardenId], references: [id], onDelete: Cascade)
   author   User      @relation(fields: [authorUserId], references: [id], onDelete: Cascade)
   plot     Plot?     @relation(fields: [plotId], references: [id], onDelete: SetNull)
   task     Task?     @relation(fields: [taskId], references: [id], onDelete: SetNull)

@@ -1,13 +1,12 @@
 import Link from "next/link";
-import { auth } from "@/lib/auth";
+import { getActiveGarden } from "@/lib/garden";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { AppShell } from "@/components/app-shell";
 
 export default async function AdminReportsPage() {
-  const session = await auth();
-  if (!session?.user) redirect("/login");
-  if (session.user.role !== "ADMIN") redirect("/dashboard");
+  const { gardenId, role } = await getActiveGarden();
+  if (role !== "ADMIN") redirect("/dashboard");
 
   const [
     totalUsers,
@@ -23,26 +22,31 @@ export default async function AdminReportsPage() {
     tasksByCategory,
     topGardeners,
   ] = await Promise.all([
-    db.user.count(),
-    db.plot.count(),
-    db.task.count(),
-    db.taskSignup.count(),
-    db.plantingLog.count(),
-    db.announcement.count(),
-    db.discussion.count(),
-    db.comment.count(),
-    db.plot.groupBy({ by: ["status"], _count: true }),
-    db.taskSignup.groupBy({ by: ["status"], _count: true }),
-    db.task.groupBy({ by: ["category"], _count: true }),
-    db.user.findMany({
-      select: {
-        id: true,
-        name: true,
-        _count: {
-          select: { plantingLogs: true, taskSignups: true, comments: true },
+    db.gardenMembership.count({ where: { gardenId } }),
+    db.plot.count({ where: { gardenId } }),
+    db.task.count({ where: { gardenId } }),
+    db.taskSignup.count({ where: { task: { gardenId } } }),
+    db.plantingLog.count({ where: { plot: { gardenId } } }),
+    db.announcement.count({ where: { gardenId } }),
+    db.discussion.count({ where: { gardenId } }),
+    db.comment.count({ where: { discussion: { gardenId } } }),
+    db.plot.groupBy({ by: ["status"], where: { gardenId }, _count: true }),
+    db.taskSignup.groupBy({ by: ["status"], where: { task: { gardenId } }, _count: true }),
+    db.task.groupBy({ by: ["category"], where: { gardenId }, _count: true }),
+    db.gardenMembership.findMany({
+      where: { gardenId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            _count: {
+              select: { plantingLogs: true, taskSignups: true, comments: true },
+            },
+          },
         },
       },
-      orderBy: { taskSignups: { _count: "desc" } },
+      orderBy: { user: { taskSignups: { _count: "desc" } } },
       take: 10,
     }),
   ]);
@@ -212,22 +216,22 @@ export default async function AdminReportsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-              {topGardeners.map((g) => {
+              {topGardeners.map((m) => {
                 const total =
-                  g._count.taskSignups + g._count.plantingLogs + g._count.comments;
+                  m.user._count.taskSignups + m.user._count.plantingLogs + m.user._count.comments;
                 return (
-                  <tr key={g.id}>
+                  <tr key={m.user.id}>
                     <td className="py-2">
                       <Link
-                        href={`/members/${g.id}`}
+                        href={`/members/${m.user.id}`}
                         className="font-medium hover:text-green-700 dark:hover:text-green-400"
                       >
-                        {g.name}
+                        {m.user.name}
                       </Link>
                     </td>
-                    <td className="py-2 text-right">{g._count.taskSignups}</td>
-                    <td className="py-2 text-right">{g._count.plantingLogs}</td>
-                    <td className="py-2 text-right">{g._count.comments}</td>
+                    <td className="py-2 text-right">{m.user._count.taskSignups}</td>
+                    <td className="py-2 text-right">{m.user._count.plantingLogs}</td>
+                    <td className="py-2 text-right">{m.user._count.comments}</td>
                     <td className="py-2 text-right font-medium">{total}</td>
                   </tr>
                 );

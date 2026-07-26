@@ -1,17 +1,16 @@
 import Link from "next/link";
-import { auth } from "@/lib/auth";
-import { redirect } from "next/navigation";
+import { getActiveGarden } from "@/lib/garden";
 import { db } from "@/lib/db";
 import { AppShell } from "@/components/app-shell";
 import { AnnouncementActions } from "./announcement-actions";
 
 export default async function AnnouncementsPage() {
-  const session = await auth();
-  if (!session?.user) redirect("/login");
+  const { gardenId, role } = await getActiveGarden();
 
-  const isStaff = session.user.role === "COORDINATOR" || session.user.role === "ADMIN";
+  const isStaff = role === "COORDINATOR" || role === "ADMIN";
 
   const announcements = await db.announcement.findMany({
+    where: { gardenId },
     orderBy: [{ pinned: "desc" }, { createdAt: "desc" }],
     include: { author: { select: { id: true, name: true } } },
   });

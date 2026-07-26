@@ -1,15 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { auth } from "./auth";
+import { requireGardenRole } from "./garden";
 import { db } from "./db";
 
 export async function createAnnouncement(formData: FormData) {
-  const session = await auth();
-  if (!session?.user) return { error: "Not authenticated." };
-  if (session.user.role !== "COORDINATOR" && session.user.role !== "ADMIN") {
-    return { error: "Only coordinators and admins can post announcements." };
-  }
+  const ctx = await requireGardenRole(["COORDINATOR", "ADMIN"]);
+  if (ctx.error) return { error: ctx.error };
 
   const title = formData.get("title") as string;
   const body = formData.get("body") as string;
@@ -24,7 +21,8 @@ export async function createAnnouncement(formData: FormData) {
       title,
       body,
       pinned,
-      authorUserId: session.user.id,
+      gardenId: ctx.gardenId,
+      authorUserId: ctx.userId,
     },
   });
 
@@ -34,10 +32,12 @@ export async function createAnnouncement(formData: FormData) {
 }
 
 export async function deleteAnnouncement(id: string) {
-  const session = await auth();
-  if (!session?.user) return { error: "Not authenticated." };
-  if (session.user.role !== "COORDINATOR" && session.user.role !== "ADMIN") {
-    return { error: "Only coordinators and admins can delete announcements." };
+  const ctx = await requireGardenRole(["COORDINATOR", "ADMIN"]);
+  if (ctx.error) return { error: ctx.error };
+
+  const announcement = await db.announcement.findUnique({ where: { id } });
+  if (!announcement || announcement.gardenId !== ctx.gardenId) {
+    return { error: "Announcement not found." };
   }
 
   await db.announcement.delete({ where: { id } });
@@ -48,14 +48,13 @@ export async function deleteAnnouncement(id: string) {
 }
 
 export async function togglePin(id: string) {
-  const session = await auth();
-  if (!session?.user) return { error: "Not authenticated." };
-  if (session.user.role !== "COORDINATOR" && session.user.role !== "ADMIN") {
-    return { error: "Only coordinators and admins can pin announcements." };
-  }
+  const ctx = await requireGardenRole(["COORDINATOR", "ADMIN"]);
+  if (ctx.error) return { error: ctx.error };
 
   const announcement = await db.announcement.findUnique({ where: { id } });
-  if (!announcement) return { error: "Announcement not found." };
+  if (!announcement || announcement.gardenId !== ctx.gardenId) {
+    return { error: "Announcement not found." };
+  }
 
   await db.announcement.update({
     where: { id },

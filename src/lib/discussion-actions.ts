@@ -1,12 +1,11 @@
 "use server";
 
-import { auth } from "@/lib/auth";
+import { getActiveGarden, requireGardenRole } from "./garden";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 
 export async function createDiscussion(formData: FormData) {
-  const session = await auth();
-  if (!session?.user?.id) return { error: "Not authenticated" };
+  const { gardenId, userId } = await getActiveGarden();
 
   const title = (formData.get("title") as string)?.trim();
   const contextType = (formData.get("contextType") as string) ?? "GENERAL";
@@ -21,9 +20,10 @@ export async function createDiscussion(formData: FormData) {
     data: {
       title,
       contextType: contextType as "GENERAL" | "PLOT" | "TASK",
+      gardenId,
       plotId: contextType === "PLOT" ? contextId : null,
       taskId: contextType === "TASK" ? contextId : null,
-      authorUserId: session.user.id,
+      authorUserId: userId,
     },
   });
 
@@ -32,16 +32,17 @@ export async function createDiscussion(formData: FormData) {
 }
 
 export async function deleteDiscussion(discussionId: string) {
-  const session = await auth();
-  if (!session?.user?.id) return { error: "Not authenticated" };
+  const { gardenId, userId, role } = await getActiveGarden();
 
   const discussion = await db.discussion.findUnique({
     where: { id: discussionId },
   });
-  if (!discussion) return { error: "Discussion not found" };
+  if (!discussion || discussion.gardenId !== gardenId) {
+    return { error: "Discussion not found" };
+  }
 
-  const isStaff = session.user.role === "ADMIN" || session.user.role === "COORDINATOR";
-  if (discussion.authorUserId !== session.user.id && !isStaff) {
+  const isStaff = role === "ADMIN" || role === "COORDINATOR";
+  if (discussion.authorUserId !== userId && !isStaff) {
     return { error: "Not authorized" };
   }
 
@@ -51,8 +52,7 @@ export async function deleteDiscussion(discussionId: string) {
 }
 
 export async function addComment(formData: FormData) {
-  const session = await auth();
-  if (!session?.user?.id) return { error: "Not authenticated" };
+  const { userId } = await getActiveGarden();
 
   const discussionId = formData.get("discussionId") as string;
   const body = (formData.get("body") as string)?.trim();
@@ -67,7 +67,7 @@ export async function addComment(formData: FormData) {
   await db.comment.create({
     data: {
       discussionId,
-      authorUserId: session.user.id,
+      authorUserId: userId,
       body,
     },
   });
@@ -77,16 +77,15 @@ export async function addComment(formData: FormData) {
 }
 
 export async function deleteComment(commentId: string) {
-  const session = await auth();
-  if (!session?.user?.id) return { error: "Not authenticated" };
+  const { userId, role } = await getActiveGarden();
 
   const comment = await db.comment.findUnique({
     where: { id: commentId },
   });
   if (!comment) return { error: "Comment not found" };
 
-  const isStaff = session.user.role === "ADMIN" || session.user.role === "COORDINATOR";
-  if (comment.authorUserId !== session.user.id && !isStaff) {
+  const isStaff = role === "ADMIN" || role === "COORDINATOR";
+  if (comment.authorUserId !== userId && !isStaff) {
     return { error: "Not authorized" };
   }
 

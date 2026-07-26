@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { auth } from "@/lib/auth";
+import { getActiveGarden } from "@/lib/garden";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { AppShell } from "@/components/app-shell";
@@ -11,9 +11,8 @@ export default async function AdminMembersPage({
 }: {
   searchParams: Promise<{ q?: string; role?: string }>;
 }) {
-  const session = await auth();
-  if (!session?.user) redirect("/login");
-  if (session.user.role !== "ADMIN") redirect("/dashboard");
+  const { gardenId, userId, role: myRole } = await getActiveGarden();
+  if (myRole !== "ADMIN") redirect("/dashboard");
 
   const { q, role } = await searchParams;
   const query = q?.trim() ?? "";
@@ -22,28 +21,39 @@ export default async function AdminMembersPage({
       ? (role as "GARDENER" | "COORDINATOR" | "ADMIN")
       : undefined;
 
-  const members = await db.user.findMany({
+  const memberships = await db.gardenMembership.findMany({
     where: {
+      gardenId,
+      ...(roleFilter ? { role: roleFilter } : {}),
       ...(query
         ? {
-            OR: [
-              { name: { contains: query, mode: "insensitive" } },
-              { email: { contains: query, mode: "insensitive" } },
-            ],
+            user: {
+              OR: [
+                { name: { contains: query, mode: "insensitive" } },
+                { email: { contains: query, mode: "insensitive" } },
+              ],
+            },
           }
         : {}),
-      ...(roleFilter ? { role: roleFilter } : {}),
     },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      role: true,
-      joinDate: true,
-      _count: { select: { plots: true, taskSignups: true } },
+    include: {
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          joinDate: true,
+          _count: { select: { plots: true, taskSignups: true } },
+        },
+      },
     },
-    orderBy: { name: "asc" },
+    orderBy: { user: { name: "asc" } },
   });
+
+  const members = memberships.map((m) => ({
+    ...m.user,
+    role: m.role,
+  }));
 
   return (
     <AppShell>
@@ -120,7 +130,7 @@ export default async function AdminMembersPage({
           </thead>
           <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
             {members.map((m) => {
-              const isSelf = m.id === session.user!.id;
+              const isSelf = m.id === userId;
               return (
                 <tr key={m.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30">
                   <td className="px-4 py-3">

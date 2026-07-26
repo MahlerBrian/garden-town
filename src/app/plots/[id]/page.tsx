@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
+import { notFound } from "next/navigation";
+import { getActiveGarden } from "@/lib/garden";
 import { db } from "@/lib/db";
 import { AppShell } from "@/components/app-shell";
 import { PlotActions } from "./plot-actions";
@@ -11,8 +11,7 @@ export default async function PlotDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const session = await auth();
-  if (!session?.user) redirect("/login");
+  const { gardenId, userId, role } = await getActiveGarden();
 
   const { id } = await params;
   const plot = await db.plot.findUnique({
@@ -26,10 +25,10 @@ export default async function PlotDetailPage({
     },
   });
 
-  if (!plot) notFound();
+  if (!plot || plot.gardenId !== gardenId) notFound();
 
-  const isOwner = plot.assignedUserId === session.user.id;
-  const isStaff = session.user.role === "COORDINATOR" || session.user.role === "ADMIN";
+  const isOwner = plot.assignedUserId === userId;
+  const isStaff = role === "COORDINATOR" || role === "ADMIN";
 
   return (
     <AppShell>
@@ -82,7 +81,7 @@ export default async function PlotDetailPage({
                     href={`/members/${plot.assignedUser.id}`}
                     className="font-medium text-green-700 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300"
                   >
-                    {plot.assignedUser.id === session.user.id
+                    {plot.assignedUser.id === userId
                       ? "you"
                       : plot.assignedUser.name}
                   </Link>
@@ -104,7 +103,7 @@ export default async function PlotDetailPage({
               userId: log.userId,
             }))}
             isOwner={isOwner}
-            currentUserId={session.user.id}
+            currentUserId={userId}
           />
         </div>
 

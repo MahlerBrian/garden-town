@@ -1,6 +1,5 @@
 import Link from "next/link";
-import { auth } from "@/lib/auth";
-import { redirect } from "next/navigation";
+import { getActiveGarden } from "@/lib/garden";
 import { db } from "@/lib/db";
 import { AppShell } from "@/components/app-shell";
 import type { DiscussionContext } from "@/generated/prisma/client";
@@ -23,8 +22,7 @@ export default async function DiscussionsPage({
 }: {
   searchParams: Promise<{ context?: string }>;
 }) {
-  const session = await auth();
-  if (!session?.user) redirect("/login");
+  const { gardenId } = await getActiveGarden();
 
   const { context } = await searchParams;
   const contextFilter =
@@ -33,7 +31,7 @@ export default async function DiscussionsPage({
       : undefined;
 
   const discussions = await db.discussion.findMany({
-    where: contextFilter ? { contextType: contextFilter } : undefined,
+    where: { gardenId, ...(contextFilter ? { contextType: contextFilter } : {}) },
     include: {
       author: { select: { id: true, name: true } },
       plot: { select: { id: true, label: true } },
@@ -45,6 +43,7 @@ export default async function DiscussionsPage({
 
   const counts = await db.discussion.groupBy({
     by: ["contextType"],
+    where: { gardenId },
     _count: true,
   });
   const countMap = Object.fromEntries(
