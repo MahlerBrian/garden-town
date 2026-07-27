@@ -3,14 +3,14 @@ import { getActiveGarden } from "@/lib/garden";
 import { SignOutButton } from "./sign-out-button";
 
 export async function AppShell({ children }: { children: React.ReactNode }) {
-  const { garden, role } = await getActiveGarden();
+  const { garden, role, session } = await getActiveGarden();
 
   const isStaff = role === "ADMIN" || role === "COORDINATOR";
 
   return (
     <div className="min-h-full bg-zinc-50 dark:bg-zinc-950">
       <header className="border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+        <div className="mx-auto flex max-w-6xl items-center gap-6 px-6 py-4">
           <div className="flex items-center gap-3">
             <Link
               href="/dashboard"
@@ -53,6 +53,9 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
             )}
             <SignOutButton />
           </nav>
+          <span className="ml-auto text-base font-semibold text-green-800 dark:text-green-400">
+            {session.user?.name}
+          </span>
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-6 py-8">{children}</main>

@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { GardenSwitchButton } from "./garden-switch-button";
+import { SignOutButton } from "@/components/sign-out-button";
 
 export default async function GardensPage() {
   const session = await auth();
@@ -52,9 +53,12 @@ export default async function GardensPage() {
           <span className="text-xl font-bold tracking-tight text-green-800 dark:text-green-400">
             Garden Town
           </span>
-          <span className="text-sm text-zinc-500 dark:text-zinc-400">
-            {session.user.name}
-          </span>
+          <div className="flex items-center gap-4">
+            <span className="text-base font-semibold text-green-800 dark:text-green-400">
+              {session.user.name}
+            </span>
+            <SignOutButton />
+          </div>
         </div>
       </header>
 
