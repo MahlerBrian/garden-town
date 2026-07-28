@@ -6,7 +6,7 @@ import { AppShell } from "@/components/app-shell";
 
 export default async function AdminReportsPage() {
   const { gardenId, role } = await getActiveGarden();
-  if (role !== "ADMIN") redirect("/dashboard");
+  if (role !== "ADMIN" && role !== "COORDINATOR") redirect("/dashboard");
 
   const [
     totalUsers,

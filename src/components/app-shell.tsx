@@ -1,11 +1,16 @@
 import Link from "next/link";
 import { getActiveGarden } from "@/lib/garden";
+import { db } from "@/lib/db";
 import { SignOutButton } from "./sign-out-button";
 
 export async function AppShell({ children }: { children: React.ReactNode }) {
-  const { garden, role, session } = await getActiveGarden();
+  const { garden, gardenId, role, session } = await getActiveGarden();
 
   const isStaff = role === "ADMIN" || role === "COORDINATOR";
+
+  const pendingRequestCount = isStaff
+    ? await db.joinRequest.count({ where: { gardenId, status: "PENDING" } })
+    : 0;
 
   return (
     <div className="min-h-full bg-zinc-50 dark:bg-zinc-950">
@@ -47,8 +52,13 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
               Discussions
             </Link>
             {isStaff && (
-              <Link href="/admin" className="hover:text-green-700 dark:hover:text-green-400">
+              <Link href="/admin" className="relative hover:text-green-700 dark:hover:text-green-400">
                 Admin
+                {pendingRequestCount > 0 && (
+                  <span className="absolute -right-3 -top-2 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold leading-none text-white">
+                    {pendingRequestCount}
+                  </span>
+                )}
               </Link>
             )}
             <SignOutButton />

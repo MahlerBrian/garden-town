@@ -9,7 +9,7 @@ import { AdminCreatePlot } from "./admin-create-plot";
 
 export default async function AdminPlotsPage() {
   const { gardenId, role } = await getActiveGarden();
-  if (role !== "ADMIN") redirect("/dashboard");
+  if (role !== "ADMIN" && role !== "COORDINATOR") redirect("/dashboard");
 
   const plots = await db.plot.findMany({
     where: { gardenId },

@@ -8,7 +8,7 @@ export async function updatePlotStatus(
   plotId: string,
   status: "AVAILABLE" | "RESERVED" | "ACTIVE" | "FALLOW"
 ) {
-  const ctx = await requireGardenRole(["ADMIN"]);
+  const ctx = await requireGardenRole(["ADMIN", "COORDINATOR"]);
   if (ctx.error) return { error: ctx.error };
 
   const plot = await db.plot.findUnique({ where: { id: plotId } });
@@ -26,7 +26,7 @@ export async function updatePlotStatus(
 }
 
 export async function createPlot(formData: FormData) {
-  const ctx = await requireGardenRole(["ADMIN"]);
+  const ctx = await requireGardenRole(["ADMIN", "COORDINATOR"]);
   if (ctx.error) return { error: ctx.error };
 
   const label = (formData.get("label") as string)?.trim();
@@ -58,7 +58,7 @@ export async function createPlot(formData: FormData) {
 }
 
 export async function deletePlot(plotId: string) {
-  const ctx = await requireGardenRole(["ADMIN"]);
+  const ctx = await requireGardenRole(["ADMIN", "COORDINATOR"]);
   if (ctx.error) return { error: ctx.error };
 
   const plot = await db.plot.findUnique({ where: { id: plotId } });

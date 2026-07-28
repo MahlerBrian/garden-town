@@ -9,7 +9,8 @@ export default async function PlotsPage({
 }: {
   searchParams: Promise<{ status?: string }>;
 }) {
-  const { gardenId, userId } = await getActiveGarden();
+  const { gardenId, userId, role } = await getActiveGarden();
+  const isStaff = role === "ADMIN" || role === "COORDINATOR";
 
   const { status } = await searchParams;
   const validStatuses = ["AVAILABLE", "RESERVED", "ACTIVE", "FALLOW"];
@@ -41,6 +42,14 @@ export default async function PlotsPage({
             {total} plots total &middot; {countMap["AVAILABLE"] ?? 0} available
           </p>
         </div>
+        {isStaff && (
+          <Link
+            href="/admin/plots"
+            className="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
+          >
+            Manage Plots
+          </Link>
+        )}
       </div>
 
       {/* Status filter tabs */}
