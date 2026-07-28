@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { db } from "./db";
 import { signIn } from "./auth";
 import { AuthError } from "next-auth";
+import { signupRateLimiter } from "./rate-limit";
 
 export async function register(formData: FormData) {
   const name = formData.get("name") as string;
@@ -16,6 +17,11 @@ export async function register(formData: FormData) {
 
   if (password.length < 8) {
     return { error: "Password must be at least 8 characters." };
+  }
+
+  const { success } = await signupRateLimiter.limit(email.toLowerCase());
+  if (!success) {
+    return { error: "Too many signup attempts. Please try again later." };
   }
 
   const existing = await db.user.findUnique({ where: { email } });
